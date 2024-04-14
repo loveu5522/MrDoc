@@ -10,7 +10,7 @@ from django.contrib.auth.models import User # Django默认用户模型
 from django.core.paginator import Paginator,PageNotAnInteger,EmptyPage,InvalidPage # 后端分页
 from django.shortcuts import render,redirect
 from django.utils.translation import gettext_lazy as _
-from app_doc.util_upload_img import upload_generation_dir,base_img_upload,url_img_upload
+from app_doc.util_upload_img import upload_generation_dir,base_img_upload,url_img_upload,img_upload
 from app_doc.utils import find_doc_next,find_doc_previous
 from app_api.models import UserToken
 from app_doc.models import Project,Doc,DocHistory,Image
@@ -219,13 +219,13 @@ def get_level_docs(request):
                 'editor_mode':doc['editor_mode'],
                 'parent_doc':doc['parent_doc'],
                 'top_doc':pid,
+                'sub':[]
             }
             doc_cnt += 1
             # 如果一级文档存在下级文档，查询其二级文档
             if doc['id'] in parent_id_list:
                 # 获取二级文档
                 sec_docs = Doc.objects.filter(top_doc=pid,parent_doc=doc['id'],status=1).values('id','name','editor_mode','parent_doc').order_by('sort')
-                top_item['sub'] = []
                 for doc in sec_docs:
                     sec_item = {
                         'id': doc['id'],
@@ -233,13 +233,13 @@ def get_level_docs(request):
                         'editor_mode':doc['editor_mode'],
                         'parent_doc': doc['parent_doc'],
                         'top_doc':pid,
+                        'sub': []
                     }
                     doc_cnt += 1
                     # 如果二级文档存在下级文档，查询第三级文档
                     if doc['id'] in parent_id_list:
                         # 获取三级文档
                         thr_docs = Doc.objects.filter(top_doc=pid,parent_doc=doc['id'],status=1).values('id','name','editor_mode','parent_doc').order_by('sort')
-                        sec_item['sub'] = []
                         for doc in thr_docs:
                             item = {
                                 'id': doc['id'],
@@ -247,6 +247,7 @@ def get_level_docs(request):
                                 'editor_mode': doc['editor_mode'],
                                 'parent_doc': doc['parent_doc'],
                                 'top_doc':pid,
+                                'sub': []
                             }
                             doc_cnt += 1
                             sec_item['sub'].append(item)
@@ -390,9 +391,19 @@ def get_doc_previous_next(request):
 @csrf_exempt
 def create_project(request):
     token = request.GET.get('token', '')
-    project_name = request.POST.get('name','')
-    project_desc = request.POST.get('desc','')
-    project_role = request.POST.get('role',1)
+    content_type = request.headers.get('Content-Type', '').lower()
+    if 'json' in content_type:
+        try:
+            json_data = json.loads(request.body.decode('utf-8'))
+            project_name = json_data.get('name', '')
+            project_desc = json_data.get('desc', '')
+            project_role = json_data.get('role', 1)
+        except json.JSONDecodeError:
+            return JsonResponse({'data': 'Invalid JSON data', 'status': False})
+    else:
+        project_name = request.POST.get('name', '')
+        project_desc = request.POST.get('desc', '')
+        project_role = request.POST.get('role', 1)
     if project_name == '':
         return JsonResponse({'status': False, 'data': _('文集名称不能为空！')})
     try:
@@ -417,11 +428,23 @@ def create_project(request):
 @csrf_exempt
 def create_doc(request):
     token = request.GET.get('token', '')
-    project_id = request.POST.get('pid','')
-    doc_title = request.POST.get('title','')
-    doc_content = request.POST.get('doc','')
-    editor_mode = request.POST.get('editor_mode',1)
-    parent_doc = request.POST.get('parent_doc', 0)
+    content_type = request.headers.get('Content-Type', '').lower()
+    if 'json' in content_type:
+        try:
+            json_data = json.loads(request.body.decode('utf-8'))
+            project_id = json_data.get('pid', '')
+            doc_title = json_data.get('title', '')
+            doc_content = json_data.get('doc', '')
+            parent_doc = json_data.get('parent_doc', 0)
+            editor_mode = json_data.get('editor_mode', 1)
+        except json.JSONDecodeError:
+            return JsonResponse({'data': 'Invalid JSON data', 'status': False})
+    else:
+        project_id = request.POST.get('pid', '')
+        doc_title = request.POST.get('title', '')
+        doc_content = request.POST.get('doc', '')
+        editor_mode = request.POST.get('editor_mode', 1)
+        parent_doc = request.POST.get('parent_doc', 0)
     try:
         # 验证Token
         token = UserToken.objects.get(token=token)
@@ -461,11 +484,23 @@ def create_doc(request):
 @csrf_exempt
 def modify_doc(request):
     token = request.GET.get('token', '')
-    project_id = request.POST.get('pid','')
-    doc_id = request.POST.get('did', '')
-    doc_title = request.POST.get('title','')
-    doc_content = request.POST.get('doc','')
-    parent_doc = request.POST.get('parent_doc', '')
+    content_type = request.headers.get('Content-Type', '').lower()
+    if 'json' in content_type:
+        try:
+            json_data = json.loads(request.body.decode('utf-8'))
+            project_id = json_data.get('pid', '')
+            doc_id = json_data.get('did', '')
+            doc_title = json_data.get('title', '')
+            doc_content = json_data.get('doc', '')
+            parent_doc = json_data.get('parent_doc', '')
+        except json.JSONDecodeError:
+            return JsonResponse({'data': 'Invalid JSON data', 'status': False})
+    else:
+        project_id = request.POST.get('pid', '')
+        doc_id = request.POST.get('did', '')
+        doc_title = request.POST.get('title', '')
+        doc_content = request.POST.get('doc', '')
+        parent_doc = request.POST.get('parent_doc', '')
     try:
         # 验证Token
         token = UserToken.objects.get(token=token)
@@ -516,12 +551,27 @@ def upload_img(request):
     # {"success": 1, "url": "图片地址"}
     ##################
     token = request.GET.get('token', '')
-    base64_img = request.POST.get('data','')
+    content_type = request.headers.get('Content-Type', '').lower()
+    if 'json' in content_type:
+        try:
+            json_data = json.loads(request.body.decode('utf-8'))
+            base64_img = json_data.get('base64', None)
+            commom_img = json_data.get('image', None)
+        except json.JSONDecodeError:
+            return JsonResponse({'data': 'Invalid JSON data', 'status': False})
+    else:
+        base64_img = request.POST.get('data', None)
+        commom_img = request.FILES.get('image', None)  # 普通图片上传
     try:
         # 验证Token
         token = UserToken.objects.get(token=token)
         # 上传图片
-        result = base_img_upload(base64_img, '', token.user)
+        if base64_img:
+            result = base_img_upload(base64_img, '', token.user)
+        elif commom_img:
+            result = img_upload(commom_img, '', token.user)
+        else:
+            return JsonResponse({'status': False, 'data': _('无有效图片')})
         return JsonResponse(result)
         # return HttpResponse(json.dumps(result), content_type="application/json")
     except ObjectDoesNotExist:
@@ -559,7 +609,15 @@ def upload_img_url(request):
 @require_http_methods(['GET','POST'])
 def delete_doc(request):
     token = request.GET.get('token', '')
-    doc_id = request.POST.get('did', '')
+    content_type = request.headers.get('Content-Type', '').lower()
+    if 'json' in content_type:
+        try:
+            json_data = json.loads(request.body.decode('utf-8'))
+            doc_id = json_data.get('did', '')
+        except json.JSONDecodeError:
+            return JsonResponse({'data': 'Invalid JSON data', 'status': False})
+    else:
+        doc_id = request.POST.get('did', '')
     try:
         # 验证Token
         token = UserToken.objects.get(token=token)

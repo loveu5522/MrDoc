@@ -40,7 +40,7 @@ SECRET_KEY = '5&71mt9@^58zdg*_!t(x6g14q*@84d%ptr%%s6e0l50zs0we3d'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = CONFIG.getboolean('site','debug',fallback=False)
 
-VERSIONS = '0.9.1'
+VERSIONS = '0.9.2'
 
 ALLOWED_HOSTS = ['*']
 
@@ -257,7 +257,7 @@ else:
 
 # 跨域请求配置
 cors_str = CONFIG.get("cors_origin","allow",fallback=[])
-capacitor_origins = ['http://localhost','capacitor://localhost']
+capacitor_origins = ['http://localhost','capacitor://localhost','app://obsidian.md']
 if cors_str == []:
     CORS_ALLOWED_ORIGINS = capacitor_origins
 else:
